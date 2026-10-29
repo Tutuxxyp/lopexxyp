@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Galaksi</title>
+<style>
+:root{color-scheme:dark;--bg:#000;--fg:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--fg);font-family:"Segoe UI",Roboto,Arial,sans-serif}
+body{background:radial-gradient(ellipse at 50% 60%,#3a0a2a 0%,#12020c 45%,#000 80%)}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.judul,.pesan{position:fixed;left:0;right:0;text-align:center;pointer-events:none;text-shadow:0 0 14px #ff3da0,0 0 30px #ff3da0}
+.judul{top:calc(env(safe-area-inset-top,0px) + 16px);font-size:clamp(20px,5vw,34px);font-weight:800;letter-spacing:.18em}
+.pesan{bottom:calc(env(safe-area-inset-bottom,0px) + 34px);font-size:clamp(16px,4vw,26px)}
+.hint{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);left:0;right:0;text-align:center;font-size:12px;opacity:.5;pointer-events:none}
+#mulai{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(0,0,0,.6);cursor:pointer;transition:opacity .8s;text-align:center;padding:24px}
+#mulai.hilang{opacity:0;pointer-events:none}
+#mulai b{font-size:clamp(22px,6vw,34px);text-shadow:0 0 16px #ff3da0}
+#mulai span{opacity:.7;font-size:14px}
+#suara{position:fixed;z-index:11;top:calc(env(safe-area-inset-top,0px) + 12px);right:12px;width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.4);color:#fff;font-size:18px;cursor:pointer}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="judul" id="judul"></div>
+<div class="pesan" id="pesan"></div>
+<div class="hint">Geser buat putar · scroll buat zoom (maaf byy harus scroll) </div>
+<div id="mulai"><b>💖</b><span>Auto music</span></div>
+<button id="suara" aria-label="Suara">🔊</button>
+
+<script>
+/* ========= EDIT BAGIAN INI SAJA ========= */
+const CONFIG = {
+  judul: "Hanif",                 // tulisan di atas
+  pesan: "Happy Birthday My Babyy",    // tulisan di bawah
+  teks: [                             // tulisan yang melayang mengelilingi galaksi
+    "Happy Birthday", "I Love Youu", "Muachhh", "You're Spesial for me!",
+    "My Lovee", "Thank youu!", "Always be happyy!", "Forever I lovee youu", "Xixixixixi",
+    "Rawrrr", "💖", "✨", "🎂", "💕"
+  ],
+  hue: 330,        // warna: 330 = pink, 270 = ungu, 200 = biru, 0 = merah, 45 = emas
+  kecepatan: 1,    // kecepatan putar: 0.5 pelan, 2 cepat
+  musikFile: "music.mp3",   // kosongkan = pakai musik bawaan. Atau isi nama file, mis. "lagu.mp3" (taruh sefolder dengan file HTML ini)
+  volume: 0.7      // 0 sampai 1
+};
+/* ======================================== */
+
+document.getElementById('judul').textContent = CONFIG.judul;
+document.getElementById('pesan').textContent = CONFIG.pesan;
+
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const rnd = Math.random, R = 420, FOC = 1400, HUE = CONFIG.hue, K = CONFIG.kecepatan;
+let W, H, DPR, U, cx, cy, zoom = 1, off = 0, tiltBase = 0.5, time = 0;
+let G = [], HT = [], FN = [], TX = [], ST = [];
+
+const pal = [50, 58, 66, 74, 84, 95].map(l => `hsla(${HUE},100%,${l}%,0.85)`);
+const hpal = [58, 72, 88].map(l => `hsla(${HUE},100%,${l}%,0.9)`);
+const gauss = () => (rnd() + rnd() + rnd() - 1.5) / 1.5;
+
+function build() {
+  G = [];
+  const N = W < 600 ? 4500 : 7500, arms = 3;
+  for (let i = 0; i < N; i++) {
+    const k = Math.pow(rnd(), 1.6), r = 28 + k * R, arm = i % arms;
+    const th = arm * Math.PI * 2 / arms + r * 0.011 + (0.25 + k * 0.5) * gauss();
+    const c = Math.max(0, Math.min(5, Math.floor((1 - k) * 6 + gauss() * 0.8)));
+    G.push({ r, th, y: gauss() * (18 - 12 * k), c, s: 0.8 + rnd() * 1.6 });
+  }
+  G.sort((a, b) => a.c - b.c);
+
+  HT = [];
+  for (let i = 0; i < 2200; i++) {
+    const t = rnd() * Math.PI * 2, kk = Math.pow(rnd(), 0.4);
+    HT.push({
+      x: 16 * Math.pow(Math.sin(t), 3) * kk,
+      y: -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * kk,
+      z: (rnd() - 0.5) * 3 * kk, ph: rnd() * 6.28, c: Math.floor(rnd() * 3), s: 0.9 + rnd() * 1.4
+    });
+  }
+  HT.sort((a, b) => a.c - b.c);
+
+  FN = [];
+  for (let i = 0; i < 420; i++) FN.push({ u: rnd(), ph: rnd() * 6.28 });
+
+  TX = CONFIG.teks.map((t, i) => ({
+    t, r: 140 + ((i * 73) % 260), th: i * 2.399, y: ((i * 37) % 60) - 30, size: 20 + ((i * 11) % 14)
+  }));
+
+  ST = [];
+  for (let i = 0; i < 160; i++) ST.push({ x: rnd(), y: rnd(), r: rnd() * 1.3 + 0.3, ph: rnd() * 6.28 });
+}
+
+function resize() {
+  DPR = Math.min(devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  U = Math.min(W, H * 0.95) / 760;
+  cx = W / 2; cy = H * 0.62;
+  build();
+}
+addEventListener('resize', resize);
+
+let px, py, ps, ct, st;
+function P(x, y, z) {
+  const y2 = y * ct - z * st, z2 = y * st + z * ct;
+  ps = FOC / (FOC + z2);
+  const k = U * zoom;
+  px = cx + x * ps * k; py = cy + y2 * ps * k;
+}
+
+/* geser / zoom */
+let drag = false, lx = 0, ly = 0;
+cv.addEventListener('pointerdown', e => { drag = true; lx = e.clientX; ly = e.clientY; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  off += (e.clientX - lx) * 0.006;
+  tiltBase = Math.max(0.15, Math.min(1.2, tiltBase + (e.clientY - ly) * 0.004));
+  lx = e.clientX; ly = e.clientY;
+});
+cv.addEventListener('pointerup', () => drag = false);
+cv.addEventListener('pointercancel', () => drag = false);
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoom = Math.max(0.5, Math.min(2.2, zoom * (e.deltaY > 0 ? 0.93 : 1.07)));
+}, { passive: false });
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; time += dt;
+  ctx.clearRect(0, 0, W, H);
+  const k = U * zoom;
+  const tilt = tiltBase + Math.sin(time * 0.25) * 0.07;
+  st = Math.sin(tilt); ct = Math.cos(tilt);
+  off += dt * K * 0.12;
+
+  /* bintang */
+  for (const s of ST) {
+    ctx.globalAlpha = 0.3 + 0.5 * Math.abs(Math.sin(time * 1.2 + s.ph));
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(s.x * W, s.y * H, s.r, s.r);
+  }
+
+  /* lubang hitam */
+  ctx.globalAlpha = 1;
+  ctx.save();
+  ctx.translate(cx, cy); ctx.scale(1, st);
+  const g = ctx.createRadialGradient(0, 0, 10 * k, 0, 0, 100 * k);
+  g.addColorStop(0, `hsla(${HUE},100%,75%,0.95)`);
+  g.addColorStop(0.35, `hsla(${HUE},100%,55%,0.45)`);
+  g.addColorStop(1, `hsla(${HUE},100%,50%,0)`);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 100 * k, 0, 7); ctx.fill();
+  ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0, 0, 20 * k, 0, 7); ctx.fill();
+  ctx.restore();
+
+  ctx.globalCompositeOperation = 'lighter';
+
+  /* galaksi */
+  let lc = -1;
+  for (const p of G) {
+    p.th += dt * K * 0.3 / (1 + p.r / 250);
+    const a = p.th + off;
+    P(p.r * Math.cos(a), p.y, p.r * Math.sin(a));
+    if (p.c !== lc) { ctx.fillStyle = pal[p.c]; lc = p.c; }
+    const sz = p.s * ps * k * 0.9;
+    ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+  }
+
+  /* aliran dari hati ke tengah */
+  const hy0 = -265, sc = 8 * (1 + 0.05 * Math.sin(time * 2.5));
+  ctx.fillStyle = hpal[2];
+  for (const f of FN) {
+    f.u += dt * 0.25 * K; if (f.u > 1) f.u -= 1;
+    const rho = 3 + (1 - f.u) * 38, ph = time * 4 + f.ph;
+    P(rho * Math.cos(ph), -129 * (1 - f.u), rho * Math.sin(ph));
+    const sz = 2 * ps * k;
+    ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+  }
+
+  /* hati (partikel) */
+  const ang = Math.sin(time * 0.6) * 0.7, ca = Math.cos(ang), sa = Math.sin(ang);
+  lc = -1;
+  for (const h of HT) {
+    const x = h.x * sc + Math.sin(time * 2 + h.ph) * 1.5;
+    const y = hy0 + h.y * sc + Math.cos(time * 1.7 + h.ph) * 1.5;
+    const z = h.z * sc;
+    const xr = x * ca + z * sa, zr = -x * sa + z * ca;
+    const s = FOC / (FOC + zr);
+    if (h.c !== lc) { ctx.fillStyle = hpal[h.c]; lc = h.c; }
+    const sz = h.s * s * k * 1.2;
+    ctx.fillRect(cx + xr * s * k - sz / 2, cy + y * s * k - sz / 2, sz, sz);
+  }
+
+  ctx.globalCompositeOperation = 'source-over';
+
+  /* tulisan melayang */
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = `hsl(${HUE},100%,60%)`; ctx.shadowBlur = 12;
+  for (const t of TX) {
+    t.th += dt * K * 0.3 / (1 + t.r / 250);
+    const a = t.th + off;
+    P(t.r * Math.cos(a), t.y, t.r * Math.sin(a));
+    ctx.globalAlpha = Math.max(0.2, Math.min(1, 0.25 + 0.75 * (ps - 0.75) / 0.6));
+    ctx.fillStyle = `hsl(${HUE},100%,90%)`;
+    ctx.font = `700 ${Math.max(8, t.size * ps * k)}px "Segoe UI",Roboto,Arial,sans-serif`;
+    ctx.fillText(t.t, px, py);
+  }
+  ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+
+  requestAnimationFrame(frame);
+}
+
+/* ===== MUSIK ===== */
+let AC = null, master = null, bus = null, started = false, muted = false, fileAudio = null;
+const NF = {G2:98,F2:87.31,C3:130.81,F3:174.61,G3:196,A3:220,B3:246.94,C4:261.63,D4:293.66,E4:329.63,G4:392,A4:440,B4:493.88,C5:523.25,D5:587.33,E5:659.25,F5:698.46,G5:783.99};
+const CH = {C:[['C3'],['C4','E4','G4']], G:[['G2'],['G3','B3','D4']], F:[['F2'],['F3','A3','C4']]};
+const LINES = [
+  {ch:'C', n:[['G4',.75],['G4',.25],['A4',1],['G4',1],['C5',1],['B4',2]]},
+  {ch:'G', n:[['G4',.75],['G4',.25],['A4',1],['G4',1],['D5',1],['C5',2]]},
+  {ch:'C', n:[['G4',.75],['G4',.25],['G5',1],['E5',1],['C5',1],['B4',1],['A4',1]]},
+  {ch:'F', n:[['F5',.75],['F5',.25],['E5',1],['C5',1],['D5',1],['C5',2]]}
+];
+const BEAT = 0.62, LOOP = 25 * BEAT;
+function tone(f, t, d, type, vol, att) {
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + att);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  o.connect(g); g.connect(bus); o.start(t); o.stop(t + d + 0.05);
+}
+function schedule(t0) {
+  let t = t0;
+  for (const L of LINES) {
+    const ch = CH[L.ch];
+    tone(NF[ch[0][0]], t, 6 * BEAT, 'sine', 0.12, 0.3);
+    for (let b = 0; b < 12; b++) tone(NF[ch[1][b % 3]] * 2, t + b * BEAT * 0.5, BEAT * 1.4, 'sine', 0.035, 0.01);
+    let tn = t;
+    for (const [n, d] of L.n) {
+      tone(NF[n], tn, d * BEAT * 1.15, 'triangle', 0.16, 0.02);
+      tone(NF[n] * 2, tn, d * BEAT * 0.8, 'sine', 0.035, 0.01);
+      tn += d * BEAT;
+    }
+    t += 6 * BEAT;
+  }
+  const next = t0 + LOOP;
+  setTimeout(() => schedule(next), Math.max(100, (next - AC.currentTime - 2) * 1000));
+}
+function startMusic(auto) {
+  if (started) return;
+  const el = document.getElementById('mulai');
+  if (CONFIG.musikFile) {
+    const a = new Audio(CONFIG.musikFile); a.loop = true; a.volume = CONFIG.volume;
+    a.play().then(() => { fileAudio = a; started = true; el.classList.add('hilang'); }).catch(() => {});
+    return;
+  }
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return;
+  const ac = new Ctx();
+  if (ac.state !== 'running') ac.resume();
+  if (auto && ac.state !== 'running') { ac.close(); return; }
+  AC = ac; started = true;
+  master = AC.createGain(); master.gain.value = 0.0001; master.connect(AC.destination);
+  master.gain.setTargetAtTime(CONFIG.volume, AC.currentTime, 1.2);
+  bus = AC.createGain(); bus.connect(master);
+  const dl = AC.createDelay(); dl.delayTime.value = 0.38;
+  const fb = AC.createGain(); fb.gain.value = 0.35;
+  const wet = AC.createGain(); wet.gain.value = 0.35;
+  bus.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(master);
+  schedule(AC.currentTime + 0.2);
+  el.classList.add('hilang');
+}
+document.getElementById('mulai').addEventListener('pointerup', () => startMusic(false));
+document.getElementById('suara').addEventListener('click', e => {
+  if (!started) { startMusic(false); return; }
+  muted = !muted;
+  e.currentTarget.textContent = muted ? '🔇' : '🔊';
+  if (fileAudio) fileAudio.muted = muted;
+  if (master) master.gain.setTargetAtTime(muted ? 0.0001 : CONFIG.volume, AC.currentTime, 0.1);
+});
+try { startMusic(true); } catch (e) {}
+
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
